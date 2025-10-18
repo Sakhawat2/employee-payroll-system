@@ -1,19 +1,36 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
+const jwt = require("jsonwebtoken");
+const Employee = require("../models/Employee");
 
-router.post('/login', async (req, res) => {
-  const { role, email, password } = req.body;
+const SECRET = "your_jwt_secret"; // move to .env in real use
 
-  // Dummy validation
-  if (email === 'admin@example.com' && password === 'admin123' && role === 'admin') {
-    return res.json({ message: 'Admin login successful' });
+// 🔹 POST /api/auth/login
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const user = await Employee.findOne({ email });
+
+    if (!user || user.password !== password) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Create JWT
+    const token = jwt.sign(
+      { id: user._id, role: user.role, name: user.name },
+      SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: { name: user.name, role: user.role, email: user.email },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Login failed" });
   }
-
-  if (email === 'employee@example.com' && password === 'emp123' && role === 'employee') {
-    return res.json({ message: 'Employee login successful' });
-  }
-
-  res.status(401).json({ error: 'Invalid credentials' });
 });
 
 module.exports = router;
