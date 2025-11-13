@@ -41,7 +41,7 @@ const MainLayout = () => {
     document.body.style.color = darkMode ? "#e2e8f0" : "#111";
   }, [darkMode]);
 
-  // 🔔 Fetch Notifications (dynamic)
+  // 🔔 Fetch Notifications dynamically
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
@@ -53,6 +53,8 @@ const MainLayout = () => {
       }
     };
     fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000); // every 30s
+    return () => clearInterval(interval);
   }, []);
 
   // 🧩 Close dropdowns when clicking outside
@@ -71,10 +73,30 @@ const MainLayout = () => {
 
   // 🚪 Logout
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/login");
+    if (window.confirm("Are you sure you want to logout?")) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      navigate("/login");
+    }
   };
+
+  // 🧭 Dynamic Sidebar Items (based on role)
+  const role = user?.role || "employee";
+  const navItems =
+    role === "admin"
+      ? [
+          { path: "/", label: "Dashboard", icon: Home },
+          { path: "/employees", label: "Employees", icon: Users },
+          { path: "/work-records", label: "Work Records", icon: Clock },
+          { path: "/payroll", label: "Payroll", icon: DollarSign },
+          { path: "/invoices", label: "Invoices", icon: FileText },
+          { path: "/settings", label: "Settings", icon: Settings },
+        ]
+      : [
+          { path: "/work-records", label: "Work Records", icon: Clock },
+          { path: "/payroll", label: "Payroll", icon: DollarSign },
+          { path: "/settings", label: "Settings", icon: Settings },
+        ];
 
   return (
     <div style={containerStyle}>
@@ -220,7 +242,10 @@ const MainLayout = () => {
                 >
                   <p
                     style={dropdownItem}
-                    onClick={() => navigate("/settings")}
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate("/settings");
+                    }}
                   >
                     👤 View Profile
                   </p>
@@ -241,16 +266,6 @@ const MainLayout = () => {
     </div>
   );
 };
-
-/* --- Sidebar Items --- */
-const navItems = [
-  { path: "/", label: "Dashboard", icon: Home },
-  { path: "/employees", label: "Employees", icon: Users },
-  { path: "/work-records", label: "Work Records", icon: Clock },
-  { path: "/payroll", label: "Payroll", icon: DollarSign },
-  { path: "/invoices", label: "Invoices", icon: FileText },
-  { path: "/settings", label: "Settings", icon: Settings },
-];
 
 /* --- Styles --- */
 const containerStyle = { display: "flex", height: "100vh", overflow: "hidden" };

@@ -1,35 +1,46 @@
-const express = require('express');
+// backend/routes/employees.js
+const express = require("express");
 const router = express.Router();
-const Employee = require('../models/Employee');
-const WorkRecord = require('../models/WorkRecord');
-const Payroll = require('../models/Payroll');
-
-// Dummy middleware for testing (replace with real auth later)
-function verifyToken(req, res, next) {
-  req.user = { id: 'EMP001' }; // Use string-based employeeId now
-  next();
-}
+const Employee = require("../models/Employee");
+const WorkRecord = require("../models/WorkRecord");
+const Payroll = require("../models/Payroll");
+const verifyToken = require("../middleware/auth"); // ✅ Must properly decode JWT
 
 /* ======================================
-   🔹 GET all employees
+   🔹 GET all employees (Admin only)
 ====================================== */
-router.get('/', async (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   try {
+    // Make sure middleware adds req.user.role
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Access denied: Admin only" });
+    }
+
     const employees = await Employee.find();
     res.json(employees);
   } catch (err) {
     console.error("❌ Error fetching employees:", err);
-    res.status(500).json({ error: 'Failed to fetch employees' });
+    res.status(500).json({ error: "Failed to fetch employees" });
   }
 });
 
 /* ======================================
-   🔹 GET single employee by MongoDB _id
+   🔹 GET single employee (Admin or self)
 ====================================== */
-router.get('/:id', async (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
   try {
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) return res.status(404).json({ error: "Employee not found" });
+    // Only Admin or self can view
+    if (req.user.role !== 'admin' && req.user.id !== req.params.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const employee = await Employee.findById(req.params.id).lean();
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+    // Ensure nested objects exist so frontend doesn’t crash
+    if (!employee.bankInfo) employee.bankInfo = {};
+    if (!employee.employmentInfo) employee.employmentInfo = {};
+
     res.json(employee);
   } catch (err) {
     console.error("❌ Error fetching employee:", err);
@@ -37,13 +48,18 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+
 /* ======================================
-   🔹 POST add new employee with auto-generated EMP ID
+   🔹 POST add new employee (Admin only)
 ====================================== */
-router.post('/', async (req, res) => {
+router.post("/", verifyToken, async (req, res) => {
   try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Access denied: Admin only" });
+    }
+
     const count = await Employee.countDocuments();
-    const nextId = `EMP${String(count + 1).padStart(3, '0')}`; // e.g. EMP001
+    const nextId = `EMP${String(count + 1).padStart(3, "0")}`;
 
     const { name, email, phone, address, role, password } = req.body;
 
@@ -54,53 +70,78 @@ router.post('/', async (req, res) => {
       phone,
       address,
       role,
-      password
+      password,
     });
 
     const saved = await newEmployee.save();
     res.status(201).json(saved);
   } catch (err) {
     console.error("❌ Error creating employee:", err);
-    res.status(400).json({ error: 'Failed to create employee', details: err.message });
+    res
+      .status(400)
+      .json({ error: "Failed to create employee", details: err.message });
   }
 });
 
 /* ======================================
-   🔹 PUT update employee by _id
+   🔹 PUT update employee (Admin or self)
 ====================================== */
-router.put('/:id', async (req, res) => {
+router.put("/:id", verifyToken, async (req, res) => {
   try {
-    const updated = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (req.user.role !== "admin" && req.user.id !== req.params.id) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const updated = await Employee.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
     res.json(updated);
   } catch (err) {
     console.error("❌ Error updating employee:", err);
-    res.status(500).json({ error: 'Failed to update employee' });
+    res.status(500).json({ error: "Failed to update employee" });
   }
 });
 
 /* ======================================
-   🔹 GET work records for logged-in employee
+   🔹 DELETE employee (Admin only)
 ====================================== */
-router.get('/work-records', verifyToken, async (req, res) => {
+router.delete("/:id", verifyToken, async (req, res) => {
   try {
-    const records = await WorkRecord.find({ employeeId: req.user.id });
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Access denied: Admin only" });
+    }
+
+    await Employee.findByIdAndDelete(req.params.id);
+    res.json({ message: "Employee deleted successfully" });
+  } catch (err) {
+    console.error("❌ Error deleting employee:", err);
+    res.status(500).json({ error: "Failed to delete employee" });
+  }
+});
+
+/* ======================================
+   🔹 GET work records for logged-in user
+====================================== */
+router.get("/work-records", verifyToken, async (req, res) => {
+  try {
+    const records = await WorkRecord.find({ employeeId: req.user.employeeId });
     res.json(records);
   } catch (err) {
     console.error("❌ Error fetching work records:", err);
-    res.status(500).json({ error: 'Failed to fetch work records' });
+    res.status(500).json({ error: "Failed to fetch work records" });
   }
 });
 
 /* ======================================
-   🔹 GET payroll summary for logged-in employee
+   🔹 GET payroll summary for logged-in user
 ====================================== */
-router.get('/payroll', verifyToken, async (req, res) => {
+router.get("/payroll", verifyToken, async (req, res) => {
   try {
-    const payroll = await Payroll.findOne({ employeeId: req.user.id });
+    const payroll = await Payroll.findOne({ employeeId: req.user.employeeId });
     res.json(payroll || { message: "No payroll record found" });
   } catch (err) {
     console.error("❌ Error fetching payroll:", err);
-    res.status(500).json({ error: 'Failed to fetch payroll summary' });
+    res.status(500).json({ error: "Failed to fetch payroll summary" });
   }
 });
 

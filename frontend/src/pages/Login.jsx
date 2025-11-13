@@ -31,9 +31,18 @@ function Login() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Login failed");
 
-      // Save token + user
+      // ✅ Save token + user info for access control
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem(
+        "user",
+        JSON.stringify({
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role,
+          employeeId: data.user.employeeId,
+        })
+      );
 
       // ✅ Remember email only if checked
       if (remember) {
@@ -42,7 +51,12 @@ function Login() {
         localStorage.removeItem("rememberEmail");
       }
 
-      navigate("/");
+      // Redirect based on role
+      if (data.user.role === "admin") {
+        navigate("/");
+      } else {
+        navigate("/work-records"); // employees go directly to their work records
+      }
     } catch (err) {
       setError(err.message);
     }

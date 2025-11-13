@@ -18,16 +18,13 @@ app.use(express.json());
 app.use(morgan("dev")); // Optional: logs requests for debugging
 
 // 🛠 Routes
-app.use("/api/employees", require("./routes/employees"));
+app.use("/api/employees", require("./routes/employeeRoutes")); // ✅ FIXED filename
 app.use("/api/work-records", require("./routes/workRecords"));
-
-// ✅ Optional placeholder for future payroll summary route
-// Example: /api/payroll/summary?month=2025-10
-// (We'll add logic later in routes/payroll.js)
 app.use("/api/payroll", require("./routes/payroll"));
 app.use("/api/payments", require("./routes/payments"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/notifications", require("./routes/notifications"));
+app.use("/api/holidays", require("./routes/holidayRoutes")); // ✅ Keep as is
 
 // 🔥 Root endpoint
 app.get("/", (req, res) => {

@@ -1,11 +1,16 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const workRecordSchema = new mongoose.Schema({
-  employeeId: { type: String, required: true },  // ✅ now string, not ObjectId
-  employeeName: { type: String, required: true }, // ✅ keep this for clarity
-  date: { type: String, required: true },
-  hours: { type: Number, required: true },
-  status: { type: String, required: true, default: "pending" }
-});
+const workRecordSchema = new mongoose.Schema(
+  {
+    employeeId: { type: String, required: true },
+    employeeName: { type: String },
+    date: { type: String, required: true },
+    startTime: { type: String },   // 🕒 Added
+    endTime: { type: String },     // 🕒 Added
+    hours: { type: Number, required: true },
+    status: { type: String, default: "pending" }, // pending / approved / rejected
+  },
+  { timestamps: true }
+);
 
-module.exports = mongoose.models.WorkRecord || mongoose.model('WorkRecord', workRecordSchema);
+module.exports = mongoose.model("WorkRecord", workRecordSchema);

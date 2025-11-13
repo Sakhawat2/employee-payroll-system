@@ -1,63 +1,111 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const WorkRecord = require('../models/WorkRecord');
+const WorkRecord = require("../models/WorkRecord");
+const verifyToken = require("../middleware/auth");
 
-// Dummy middleware for testing
-function verifyToken(req, res, next) {
-  req.user = { id: 'EMP001' }; // Replace with real ID after authentication
-  next();
-}
-
-// 🔹 GET all or filtered work records
-router.get('/', verifyToken, async (req, res) => {
+/* ======================================
+   🔹 GET all or filtered work records
+   Admin → all records
+   Employee → only their own
+====================================== */
+router.get("/", verifyToken, async (req, res) => {
   try {
     const { employee, date } = req.query;
     const query = {};
 
-    if (employee) query.employeeId = employee; // string-based
+    // Admin can filter any employee
+    if (req.user.role === "admin") {
+      if (employee) query.employeeId = employee;
+    } else {
+      query.employeeId = req.user.employeeId;
+    }
+
     if (date) query.date = date;
 
     console.log("🔍 Querying WorkRecords:", query);
-    const records = await WorkRecord.find(query);
+    const records = await WorkRecord.find(query).sort({ date: 1 });
     res.json(records);
   } catch (err) {
     console.error("❌ Error fetching work records:", err);
-    res.status(500).json({ error: 'Failed to fetch work records', details: err.message });
+    res.status(500).json({ error: "Failed to fetch work records" });
   }
 });
 
-// 🔹 POST new work record
-router.post('/', verifyToken, async (req, res) => {
+/* ======================================
+   🔹 POST new work record
+   Employee → can add only their own
+   Admin → can add for anyone
+====================================== */
+router.post("/", verifyToken, async (req, res) => {
   try {
+    const {
+      employeeId,
+      employeeName,
+      date,
+      startTime,
+      endTime,
+      hours,
+      status,
+    } = req.body;
+
     const newRecord = new WorkRecord({
-      employeeId: req.body.employeeId || req.user.id,
-      employeeName: req.body.employeeName || 'Unknown',
-      date: req.body.date,
-      hours: req.body.hours,
-      status: req.body.status || 'pending'
+      employeeId: req.user.role === "admin" ? employeeId : req.user.employeeId,
+      employeeName: req.user.role === "admin" ? employeeName : req.user.name,
+      date,
+      startTime, // ⬅️ added
+      endTime,   // ⬅️ added
+      hours,
+      status: status || "pending",
     });
 
     const saved = await newRecord.save();
     res.status(201).json(saved);
   } catch (err) {
     console.error("❌ Error creating work record:", err);
-    res.status(400).json({ error: 'Failed to create work record', details: err.message });
+    res
+      .status(400)
+      .json({ error: "Failed to create work record", details: err.message });
   }
 });
 
-// 🔹 PUT update work record
-router.put('/:id', verifyToken, async (req, res) => {
+/* ======================================
+   🔹 PUT update work record
+   Admin → any record
+   Employee → only their own
+====================================== */
+router.put("/:id", verifyToken, async (req, res) => {
   try {
-    const updated = await WorkRecord.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const record = await WorkRecord.findById(req.params.id);
+    if (!record) return res.status(404).json({ error: "Work record not found" });
+
+    if (req.user.role !== "admin" && record.employeeId !== req.user.employeeId)
+      return res.status(403).json({ error: "Access denied" });
+
+    const { date, startTime, endTime, hours, status } = req.body;
+    record.date = date || record.date;
+    record.startTime = startTime || record.startTime;
+    record.endTime = endTime || record.endTime;
+    record.hours = hours || record.hours;
+    record.status = status || record.status;
+
+    const updated = await record.save();
     res.json(updated);
   } catch (err) {
-    res.status(400).json({ error: 'Failed to update work record' });
+    console.error("❌ Error updating work record:", err);
+    res.status(400).json({ error: "Failed to update work record" });
   }
 });
 
-// 🔹 PUT update only status
-router.put('/:id/status', verifyToken, async (req, res) => {
+/* ======================================
+   🔹 PUT update only status
+   Admin → allowed
+   Employee → not allowed
+====================================== */
+router.put("/:id/status", verifyToken, async (req, res) => {
   try {
+    if (req.user.role !== "admin")
+      return res.status(403).json({ error: "Only admins can update status" });
+
     const updated = await WorkRecord.findByIdAndUpdate(
       req.params.id,
       { status: req.body.status },
@@ -65,35 +113,44 @@ router.put('/:id/status', verifyToken, async (req, res) => {
     );
     res.json(updated);
   } catch (err) {
-    res.status(400).json({ error: 'Failed to update status' });
+    console.error("❌ Error updating status:", err);
+    res.status(400).json({ error: "Failed to update status" });
   }
 });
 
-// GET /api/work-records?employeeId=EMP001&month=2025-10
-router.get("/", async (req, res) => {
+/* ======================================
+   🔹 DELETE work record
+   Admin → any record
+   Employee → only their own if not approved
+====================================== */
+router.delete("/:id", verifyToken, async (req, res) => {
   try {
-    const { employeeId, month } = req.query;
-    const query = {};
+    const record = await WorkRecord.findById(req.params.id);
+    if (!record) return res.status(404).json({ error: "Work record not found" });
 
-    if (employeeId) query.employeeId = employeeId;
-    if (month) {
-      const [year, mon] = month.split("-");
-      const start = new Date(`${year}-${mon}-01`);
-      const end = new Date(start);
-      end.setMonth(end.getMonth() + 1);
-      query.date = { $gte: start, $lt: end };
+    // ✅ Admin can delete any record
+    if (req.user.role === "admin") {
+      await WorkRecord.findByIdAndDelete(req.params.id);
+      return res.json({ message: "Work record deleted successfully" });
     }
 
-    console.log("🔍 Querying WorkRecords:", query);
+    // ✅ Employee can delete only their own and only if not approved
+    if (
+      req.user.role === "employee" &&
+      record.employeeId === req.user.employeeId &&
+      record.status !== "approved"
+    ) {
+      await WorkRecord.findByIdAndDelete(req.params.id);
+      return res.json({ message: "Work record deleted successfully" });
+    }
 
-    const records = await WorkRecord.find(query);
-    res.json(records);
+    return res
+      .status(403)
+      .json({ error: "Access denied for this operation" });
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Error fetching work records");
+    console.error("❌ Error deleting work record:", err);
+    res.status(500).json({ error: "Failed to delete work record" });
   }
 });
-
-
 
 module.exports = router;

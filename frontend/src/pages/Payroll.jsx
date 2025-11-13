@@ -13,6 +13,11 @@ import {
 } from "recharts";
 import { generatePayslip } from "../utils/generatePayslip";
 
+// ✅ Helper for attaching auth token
+const getAuthHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem("token")}`,
+});
+
 function Payroll() {
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -29,7 +34,9 @@ function Payroll() {
 
   // 🧩 Fetch Employees
   useEffect(() => {
-    fetch("http://localhost:5000/api/employees")
+    fetch("http://localhost:5000/api/employees", {
+      headers: getAuthHeaders(),
+    })
       .then((res) => res.json())
       .then((data) => setEmployees(data))
       .catch((err) => console.error("Error fetching employees:", err));
@@ -37,7 +44,9 @@ function Payroll() {
 
   // 📅 Fetch Work Records
   useEffect(() => {
-    fetch("http://localhost:5000/api/work-records")
+    fetch("http://localhost:5000/api/work-records", {
+      headers: getAuthHeaders(),
+    })
       .then((res) => res.json())
       .then((data) => setRecords(data))
       .catch((err) => console.error("Error fetching records:", err));
@@ -149,7 +158,10 @@ function Payroll() {
     if (emp.status === "unpaid") {
       await fetch("http://localhost:5000/api/payments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           employeeId: emp.employeeId,
           employeeName: emp.employeeName,

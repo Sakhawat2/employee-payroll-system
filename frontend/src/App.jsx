@@ -6,7 +6,7 @@ import Payroll from "./pages/Payroll";
 import Invoices from "./pages/Invoices";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
-import MainLayout from "./layouts/MainLayout";
+import MainLayout from "./layout/MainLayout"; // ✅ make sure folder name matches
 import ProtectedRoute from "./utils/ProtectedRoute";
 
 function App() {

@@ -31,3 +31,9 @@
 │   └── schema.sql
 ├── logs/                   # Server logs (optional)
 └── package.json            # Root-level (optional if separate frontend/backend installs)
+
+
+
+
+
+![alt text](image.png)

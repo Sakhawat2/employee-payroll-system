@@ -2,14 +2,14 @@ const express = require("express");
 const router = express.Router();
 const WorkRecord = require("../models/WorkRecord");
 const Employee = require("../models/Employee");
+const verifyToken = require("../middleware/auth"); // ✅ add auth
 
-// 📅 GET payroll summary
-// Example: GET /api/payroll?month=2025-10
-router.get("/", async (req, res) => {
+// 📅 GET payroll summary (Admin or self)
+router.get("/", verifyToken, async (req, res) => {
   try {
     const { month } = req.query; // e.g. "2025-10"
 
-    // 🔍 Build date filter if month provided
+    // 🔍 Date filter
     let dateFilter = {};
     if (month) {
       const start = new Date(`${month}-01`);
@@ -18,7 +18,12 @@ router.get("/", async (req, res) => {
       dateFilter = { date: { $gte: start, $lt: end } };
     }
 
-    // 🧾 Get all work records (filtered by month if given)
+    // 🧾 Restrict Employees to see only their own payroll
+    if (req.user.role !== "admin") {
+      dateFilter.employeeId = req.user.employeeId;
+    }
+
+    // 🧾 Get all work records
     const workRecords = await WorkRecord.find(dateFilter);
 
     // ⚙️ Group by employeeId
@@ -33,10 +38,10 @@ router.get("/", async (req, res) => {
 
     const employees = await Employee.find();
 
-    // 💰 Calculate payroll (total hours × hourly rate)
+    // 💰 Calculate payroll
     const payrollSummary = Object.values(grouped).map((emp) => {
       const employee = employees.find((e) => e.employeeId === emp.employeeId);
-      const rate = employee?.hourlyRate || 15; // default $15/hour if not defined
+      const rate = employee?.hourlyRate || 15; // default €15/hr
       const totalPay = emp.totalHours * rate;
       return {
         employeeId: emp.employeeId,
@@ -49,7 +54,7 @@ router.get("/", async (req, res) => {
 
     res.json(payrollSummary);
   } catch (err) {
-    console.error("Error fetching payroll summary:", err);
+    console.error("❌ Error fetching payroll summary:", err);
     res.status(500).json({ error: "Failed to fetch payroll summary" });
   }
 });
