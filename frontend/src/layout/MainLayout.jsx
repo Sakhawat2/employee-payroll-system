@@ -27,7 +27,7 @@ const MainLayout = () => {
   const profileRef = useRef();
   const navigate = useNavigate();
 
-  // 🧠 Load user info from localStorage
+  // Load user
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
@@ -35,13 +35,13 @@ const MainLayout = () => {
     }
   }, []);
 
-  // 🌙 Dark Mode Effect
+  // Dark mode
   useEffect(() => {
     document.body.style.backgroundColor = darkMode ? "#1e293b" : "#f9fafc";
     document.body.style.color = darkMode ? "#e2e8f0" : "#111";
   }, [darkMode]);
 
-  // 🔔 Fetch Notifications dynamically
+  // Notifications
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
@@ -53,11 +53,11 @@ const MainLayout = () => {
       }
     };
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // every 30s
+    const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // 🧩 Close dropdowns when clicking outside
+  // Close dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notifRef.current && !notifRef.current.contains(event.target)) {
@@ -68,10 +68,11 @@ const MainLayout = () => {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () =>
+      document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 🚪 Logout
+  // Logout
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
       localStorage.removeItem("token");
@@ -80,8 +81,9 @@ const MainLayout = () => {
     }
   };
 
-  // 🧭 Dynamic Sidebar Items (based on role)
+  // Sidebar Navigation (Adjusted for employee)
   const role = user?.role || "employee";
+
   const navItems =
     role === "admin"
       ? [
@@ -94,7 +96,7 @@ const MainLayout = () => {
         ]
       : [
           { path: "/work-records", label: "Work Records", icon: Clock },
-          { path: "/payroll", label: "Payroll", icon: DollarSign },
+          { path: "/my-payroll", label: "My Payslip", icon: DollarSign }, // FIXED
           { path: "/settings", label: "Settings", icon: Settings },
         ];
 
@@ -173,7 +175,7 @@ const MainLayout = () => {
           </div>
 
           <div style={rightTop}>
-            {/* 🔔 Notifications Dropdown */}
+            {/* Notifications */}
             <div
               style={{ position: "relative", marginRight: "20px" }}
               ref={notifRef}
@@ -216,12 +218,12 @@ const MainLayout = () => {
               )}
             </div>
 
-            {/* 🌙 Dark Mode Toggle */}
+            {/* Dark Mode Toggle */}
             <button onClick={() => setDarkMode(!darkMode)} style={iconBtn}>
               {darkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {/* 👤 Profile Dropdown */}
+            {/* Profile Menu */}
             <div style={{ position: "relative" }} ref={profileRef}>
               <button
                 style={profileBox}
@@ -258,7 +260,7 @@ const MainLayout = () => {
           </div>
         </header>
 
-        {/* Page Content */}
+        {/* Content */}
         <main style={mainContent}>
           <Outlet />
         </main>

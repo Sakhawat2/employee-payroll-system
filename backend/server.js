@@ -25,6 +25,15 @@ app.use("/api/payments", require("./routes/payments"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/holidays", require("./routes/holidayRoutes")); // ✅ Keep as is
+app.use("/api/invoices", require("./routes/invoices"));
+app.use("/api/invoices", require("./routes/invoiceRoutes"));
+app.use("/api/password", require("./routes/password"));
+app.use("/api/upload", require("./routes/upload"));
+app.use("/uploads", express.static("uploads"));
+
+
+
+
 
 // 🔥 Root endpoint
 app.get("/", (req, res) => {

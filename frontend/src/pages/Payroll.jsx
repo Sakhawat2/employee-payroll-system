@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { generatePayslip } from "../utils/generatePayslip";
 
-// ✅ Helper for attaching auth token
+// Helper for attaching auth token
 const getAuthHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
@@ -26,13 +26,13 @@ function Payroll() {
   const [payroll, setPayroll] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 💶 User-adjustable financial settings
-  const [rate, setRate] = useState(15); // default hourly rate
-  const [tax, setTax] = useState(14.5); // %
-  const [pension, setPension] = useState(7.15); // %
-  const [unemployment, setUnemployment] = useState(0.59); // %
+  // User-adjustable financial settings
+  const [rate, setRate] = useState(15);
+  const [tax, setTax] = useState(14.5);
+  const [pension, setPension] = useState(7.15);
+  const [unemployment, setUnemployment] = useState(0.59);
 
-  // 🧩 Fetch Employees
+  // Fetch Employees
   useEffect(() => {
     fetch("http://localhost:5000/api/employees", {
       headers: getAuthHeaders(),
@@ -42,7 +42,7 @@ function Payroll() {
       .catch((err) => console.error("Error fetching employees:", err));
   }, []);
 
-  // 📅 Fetch Work Records
+  // Fetch Work Records
   useEffect(() => {
     fetch("http://localhost:5000/api/work-records", {
       headers: getAuthHeaders(),
@@ -52,7 +52,7 @@ function Payroll() {
       .catch((err) => console.error("Error fetching records:", err));
   }, []);
 
-  // 🔍 Filter records by employee + month
+  // Filter records by employee + month
   const filteredRecords = useMemo(() => {
     let result = [...records];
     if (selectedEmployee)
@@ -62,12 +62,13 @@ function Payroll() {
     return result;
   }, [records, selectedEmployee, selectedMonth]);
 
-  // 💰 Calculate payroll per employee
+  // Calculate payroll per employee
   const payrollSummary = useMemo(() => {
     const totals = {};
     filteredRecords.forEach((r) => {
       const emp = employees.find((e) => e.employeeId === r.employeeId);
-      const empRate = emp?.hourlyRate || rate; // use admin-selected rate
+      const empRate = emp?.hourlyRate || rate;
+
       if (!totals[r.employeeId]) {
         totals[r.employeeId] = {
           employeeId: r.employeeId,
@@ -79,6 +80,7 @@ function Payroll() {
           datePaid: null,
         };
       }
+
       totals[r.employeeId].totalHours += Number(r.hours) || 0;
       totals[r.employeeId].totalPay =
         totals[r.employeeId].totalHours * empRate;
@@ -90,7 +92,7 @@ function Payroll() {
     setPayroll(payrollSummary);
   }, [payrollSummary]);
 
-  // 📊 Export to Excel
+  // Export to Excel
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(payroll);
     const wb = XLSX.utils.book_new();
@@ -98,7 +100,7 @@ function Payroll() {
     XLSX.writeFile(wb, `Payroll_${selectedMonth || "All"}.xlsx`);
   };
 
-  // 📄 Export to PDF
+  // Export to PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.text(`Payroll Summary (${selectedMonth || "All"})`, 14, 12);
@@ -116,7 +118,7 @@ function Payroll() {
     doc.save(`Payroll_${selectedMonth || "All"}.pdf`);
   };
 
-  // 🧾 Generate detailed payslip
+  // Generate Payslip
   const handleGeneratePayslip = (p) => {
     const company = {
       name: "Centria Payroll Systems Oy",
@@ -138,7 +140,7 @@ function Payroll() {
     generatePayslip(p, company, payrollData);
   };
 
-  // 💾 Mark employee as Paid/Unpaid + Save in DB
+  // Mark Paid / Unpaid
   const toggleStatus = async (empId) => {
     setPayroll((prev) =>
       prev.map((p) =>
@@ -179,7 +181,7 @@ function Payroll() {
     [payroll]
   );
 
-  // 🧮 Live net pay preview
+  // NET PAY preview
   const previewData = useMemo(() => {
     if (payroll.length === 0) return { gross: 0, totalDeductions: 0, net: 0 };
 
@@ -200,243 +202,323 @@ function Payroll() {
     };
   }, [payroll, tax, pension, unemployment]);
 
+  // 🏦 Download SEPA XML
+  const downloadSepaXml = async () => {
+    if (!selectedMonth) {
+      alert("Please select a month first.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/payroll/sepa-file?month=${selectedMonth}`,
+        { headers: getAuthHeaders() }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to generate SEPA XML");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SEPA_${selectedMonth}.xml`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error downloading SEPA XML:", err);
+      alert("Error generating SEPA XML");
+    }
+  };
+
   return (
     <div style={{ padding: 20 }}>
       <h2>💰 Payroll Management</h2>
 
-      {/* Filters */}
+      {/* ------------- 3-COLUMN LAYOUT (Matches Your UI) ------------- */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 12,
-          marginBottom: 20,
+          gridTemplateColumns: "30% 40% 30%",
+          gap: "25px",
+          alignItems: "flex-start",
         }}
       >
-        <label>
-          Employee:
-          <select
-            value={selectedEmployee}
-            onChange={(e) => setSelectedEmployee(e.target.value)}
+        {/* LEFT COLUMN */}
+        <div>
+          {/* --- Filters --- */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 12,
+              marginBottom: 20,
+            }}
           >
-            <option value="">All</option>
-            {employees.map((emp) => (
-              <option key={emp.employeeId} value={emp.employeeId}>
-                {emp.name} ({emp.employeeId})
-              </option>
-            ))}
-          </select>
-        </label>
+            <label>
+              Employee:
+              <select
+                value={selectedEmployee}
+                onChange={(e) => setSelectedEmployee(e.target.value)}
+              >
+                <option value="">All</option>
+                {employees.map((emp) => (
+                  <option key={emp.employeeId} value={emp.employeeId}>
+                    {emp.name} ({emp.employeeId})
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label>
-          Month:
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          />
-        </label>
+            <label>
+              Month:
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+              />
+            </label>
 
-        <label>
-          Hourly Rate (€):
-          <input
-            type="number"
-            value={rate}
-            onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
-            step="0.1"
-          />
-        </label>
+            <label>
+              Hourly Rate (€):
+              <input
+                type="number"
+                value={rate}
+                onChange={(e) =>
+                  setRate(parseFloat(e.target.value) || 0)
+                }
+                step="0.1"
+              />
+            </label>
 
-        <label>
-          Tax (%):
-          <input
-            type="number"
-            value={tax}
-            onChange={(e) => setTax(parseFloat(e.target.value) || 0)}
-            step="0.1"
-          />
-        </label>
+            <label>
+              Tax (%):
+              <input
+                type="number"
+                value={tax}
+                onChange={(e) =>
+                  setTax(parseFloat(e.target.value) || 0)
+                }
+                step="0.1"
+              />
+            </label>
 
-        <label>
-          Pension (%):
-          <input
-            type="number"
-            value={pension}
-            onChange={(e) => setPension(parseFloat(e.target.value) || 0)}
-            step="0.1"
-          />
-        </label>
+            <label>
+              Pension (%):
+              <input
+                type="number"
+                value={pension}
+                onChange={(e) =>
+                  setPension(parseFloat(e.target.value) || 0)
+                }
+                step="0.1"
+              />
+            </label>
 
-        <label>
-          Unemployment (%):
-          <input
-            type="number"
-            value={unemployment}
-            onChange={(e) => setUnemployment(parseFloat(e.target.value) || 0)}
-            step="0.1"
-          />
-        </label>
+            <label>
+              Unemployment (%):
+              <input
+                type="number"
+                value={unemployment}
+                onChange={(e) =>
+                  setUnemployment(parseFloat(e.target.value) || 0)
+                }
+                step="0.1"
+              />
+            </label>
 
-        <button
-          onClick={exportToExcel}
-          style={{ background: "#4CAF50", color: "white" }}
-        >
-          📊 Export Excel
-        </button>
-
-        <button
-          onClick={exportToPDF}
-          style={{ background: "#2196F3", color: "white" }}
-        >
-          📄 Export PDF
-        </button>
-      </div>
-
-      {/* 🧾 Auto Calculation Preview */}
-      {payroll.length > 0 && (
-        <div
-          style={{
-            border: "1px solid #ccc",
-            borderRadius: "10px",
-            padding: "16px",
-            marginBottom: "20px",
-            background: "#f9fafb",
-            boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h3 style={{ marginBottom: "8px" }}>
-            💶 Net Pay Summary (Preview)
-          </h3>
-          <p>
-            <strong>Gross Pay:</strong> €{previewData.gross.toFixed(2)}
-          </p>
-          <p>
-            <strong>Deductions:</strong>
-          </p>
-          <ul style={{ marginLeft: "20px" }}>
-            <li>Tax ({tax}%): €{previewData.taxAmount.toFixed(2)}</li>
-            <li>Pension ({pension}%): €{previewData.pensionAmount.toFixed(2)}</li>
-            <li>
-              Unemployment ({unemployment}%): €
-              {previewData.unemploymentAmount.toFixed(2)}
-            </li>
-          </ul>
-          <p style={{ fontWeight: "bold", fontSize: "1.1em" }}>
-            💰 Net Pay: €{previewData.net.toFixed(2)}
-          </p>
-        </div>
-      )}
-
-      {/* Payroll Table */}
-      <table
-        border="1"
-        cellPadding="6"
-        style={{ borderCollapse: "collapse", width: "100%" }}
-      >
-        <thead style={{ background: "#f5f5f5" }}>
-          <tr>
-            <th>Employee</th>
-            <th>Total Hours</th>
-            <th>Rate (€)</th>
-            <th>Total Pay (€)</th>
-            <th>Status</th>
-            <th>Date Paid</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {payroll.length === 0 ? (
-            <tr>
-              <td colSpan="7" style={{ textAlign: "center", color: "gray" }}>
-                No payroll data found.
-              </td>
-            </tr>
-          ) : (
-            payroll.map((p) => (
-              <tr key={p.employeeId}>
-                <td>
-                  {p.employeeName} ({p.employeeId})
-                </td>
-                <td>{p.totalHours}</td>
-                <td>{p.rate}</td>
-                <td>{p.totalPay.toFixed(2)}</td>
-                <td
-                  style={{
-                    color: p.status === "paid" ? "green" : "red",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {p.status.toUpperCase()}
-                </td>
-                <td>
-                  {p.datePaid
-                    ? new Date(p.datePaid).toLocaleDateString()
-                    : "-"}
-                </td>
-                <td>
-                  <button
-                    onClick={() => toggleStatus(p.employeeId)}
-                    style={{
-                      background: p.status === "paid" ? "#ff6666" : "#4CAF50",
-                      color: "white",
-                      padding: "4px 8px",
-                      border: "none",
-                      borderRadius: "4px",
-                      marginRight: "5px",
-                    }}
-                  >
-                    {p.status === "paid" ? "Mark Unpaid" : "Mark Paid"}
-                  </button>
-                  <button
-                    onClick={() => handleGeneratePayslip(p)}
-                    style={{
-                      background: "#2196F3",
-                      color: "white",
-                      padding: "4px 8px",
-                      border: "none",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    🧾 Payslip
-                  </button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-        {payroll.length > 0 && (
-          <tfoot style={{ background: "#f9f9f9", fontWeight: "bold" }}>
-            <tr>
-              <td colSpan="3" style={{ textAlign: "right" }}>
-                Total Payroll:
-              </td>
-              <td colSpan="4">€{totalPayroll.toFixed(2)}</td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
-
-      {/* 📊 Payroll Chart */}
-      {payroll.length > 0 && (
-        <div style={{ marginTop: 40 }}>
-          <h3>📈 Monthly Payroll Cost Trend</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={payroll.map((p) => ({
-                name: p.employeeName,
-                totalPay: p.totalPay,
-              }))}
-              margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+            <button
+              onClick={exportToExcel}
+              style={{ background: "#4CAF50", color: "white" }}
             >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="totalPay" fill="#4CAF50" />
-            </BarChart>
-          </ResponsiveContainer>
+              📊 Export Excel
+            </button>
+
+            <button
+              onClick={exportToPDF}
+              style={{ background: "#2196F3", color: "white" }}
+            >
+              📄 Export PDF
+            </button>
+
+            <button
+              onClick={downloadSepaXml}
+              style={{ background: "#6a1b9a", color: "white" }}
+            >
+              🏦 Export SEPA XML
+            </button>
+          </div>
+
+          {/* --- Net Pay Summary --- */}
+          {payroll.length > 0 && (
+            <div
+              style={{
+                border: "1px solid #ccc",
+                borderRadius: "10px",
+                padding: "16px",
+                background: "#f9fafb",
+                boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+              }}
+            >
+              <h3>💶 Net Pay Summary (Preview)</h3>
+              <p>
+                <strong>Gross Pay:</strong> €
+                {previewData.gross.toFixed(2)}
+              </p>
+
+              <p>
+                <strong>Deductions:</strong>
+              </p>
+              <ul style={{ marginLeft: "20px" }}>
+                <li>
+                  Tax ({tax}%): €
+                  {previewData.taxAmount.toFixed(2)}
+                </li>
+                <li>
+                  Pension ({pension}%): €
+                  {previewData.pensionAmount.toFixed(2)}
+                </li>
+                <li>
+                  Unemployment ({unemployment}%): €
+                  {previewData.unemploymentAmount.toFixed(2)}
+                </li>
+              </ul>
+
+              <p style={{ fontWeight: "bold", fontSize: "1.1em" }}>
+                💰 Net Pay: €{previewData.net.toFixed(2)}
+              </p>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* CENTER COLUMN — PAYROLL TABLE */}
+        <div>
+          <table
+            border="1"
+            cellPadding="6"
+            style={{ borderCollapse: "collapse", width: "100%" }}
+          >
+            <thead style={{ background: "#f5f5f5" }}>
+              <tr>
+                <th>Employee</th>
+                <th>Total Hours</th>
+                <th>Rate (€)</th>
+                <th>Total Pay (€)</th>
+                <th>Status</th>
+                <th>Date Paid</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {payroll.length === 0 ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: "center", color: "gray" }}>
+                    No payroll data found.
+                  </td>
+                </tr>
+              ) : (
+                payroll.map((p) => (
+                  <tr key={p.employeeId}>
+                    <td>
+                      {p.employeeName} ({p.employeeId})
+                    </td>
+                    <td>{p.totalHours}</td>
+                    <td>{p.rate}</td>
+                    <td>{p.totalPay.toFixed(2)}</td>
+
+                    <td
+                      style={{
+                        color: p.status === "paid" ? "green" : "red",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {p.status.toUpperCase()}
+                    </td>
+
+                    <td>
+                      {p.datePaid
+                        ? new Date(p.datePaid).toLocaleDateString()
+                        : "-"}
+                    </td>
+
+                    <td>
+                      <button
+                        onClick={() => toggleStatus(p.employeeId)}
+                        style={{
+                          background:
+                            p.status === "paid" ? "#ff6666" : "#4CAF50",
+                          color: "white",
+                          padding: "4px 8px",
+                          border: "none",
+                          borderRadius: "4px",
+                          marginRight: "5px",
+                        }}
+                      >
+                        {p.status === "paid"
+                          ? "Mark Unpaid"
+                          : "Mark Paid"}
+                      </button>
+
+                      <button
+                        onClick={() => handleGeneratePayslip(p)}
+                        style={{
+                          background: "#2196F3",
+                          color: "white",
+                          padding: "4px 8px",
+                          border: "none",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        🧾 Payslip
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+
+            {payroll.length > 0 && (
+              <tfoot style={{ background: "#f9f9f9", fontWeight: "bold" }}>
+                <tr>
+                  <td colSpan="3" style={{ textAlign: "right" }}>
+                    Total Payroll:
+                  </td>
+                  <td colSpan="4">€{totalPayroll.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+
+        {/* RIGHT COLUMN — CHART */}
+        <div>
+          {payroll.length > 0 && (
+            <>
+              <h3>📈 Monthly Payroll Cost Trend</h3>
+              <div style={{ width: "100%", height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={payroll.map((p) => ({
+                      name: p.employeeName,
+                      totalPay: p.totalPay,
+                    }))}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="totalPay" fill="#4CAF50" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

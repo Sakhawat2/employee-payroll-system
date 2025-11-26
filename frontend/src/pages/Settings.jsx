@@ -17,20 +17,22 @@ function Settings() {
 
   const token = localStorage.getItem("token");
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const isAdmin = currentUser.role === "admin";
 
-  // ✅ Load employees
+  // Load employees
   useEffect(() => {
     if (!token) return;
     setUser(currentUser);
 
     const load = async () => {
       try {
-        if (currentUser.role === "admin") {
+        if (isAdmin) {
           const res = await fetch("http://localhost:5000/api/employees", {
             headers: { Authorization: `Bearer ${token}` },
           });
           const data = await res.json();
           setEmployees(data);
+
           const self = data.find((e) => e._id === currentUser._id);
           setSelectedEmployee(self || data[0] || null);
         } else {
@@ -45,43 +47,45 @@ function Settings() {
     load();
   }, []);
 
-  // ✅ Fetch employee data + holidays
+  // Fetch employee + holidays
   const fetchEmployeeData = async (emp) => {
     try {
-      const empRes = await fetch(
+      const res = await fetch(
         `http://localhost:5000/api/employees/${emp._id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const empData = await empRes.json();
+      const data = await res.json();
 
-      console.log("📦 [DEBUG] Employee data received:", empData);
-
-      setPersonal(empData);
-      setBank(empData.bankInfo || {});
-      setEmployment({
-        employeeId: empData.employeeId,
-        role: empData.role,
-        email: empData.email,
-        address: empData.address,
-        phone: empData.phone,
-        hourlyRate: empData.hourlyRate || 15,
-        joinDate: empData.joinDate || "",
-        jobTitle: empData.jobTitle || "",
-        contractType: empData.contractType || "",
-        workingHours: empData.workingHours || "",
+      setPersonal({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        citizenship: data.citizenship,
       });
 
-      const query = currentUser.role === "admin" ? `?employeeId=${emp._id}` : "";
+      setBank(data.bankInfo || {});
+
+      setEmployment({
+        employeeId: data.employeeId,
+        role: data.role,
+        email: data.email,
+        hourlyRate: data.hourlyRate || "",
+        joinDate: data.joinDate || "",
+        jobTitle: data.jobTitle || "",
+        contractType: data.contractType || "",
+        workingHours: data.workingHours || "",
+      });
+
+      const query = isAdmin ? `?employeeId=${emp._id}` : "";
       const holRes = await fetch(
         `http://localhost:5000/api/holidays${query}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const holData = await holRes.json();
-
-      console.log("🏖️ [DEBUG] Holidays received:", holData);
       setHolidays(holData);
     } catch (err) {
-      console.error("Error fetching employee or holiday data:", err);
+      console.error("Error:", err);
     }
   };
 
@@ -89,40 +93,42 @@ function Settings() {
     if (selectedEmployee?._id) fetchEmployeeData(selectedEmployee);
   }, [selectedEmployee]);
 
-  // ✅ Save Personal/Bank/Employment Info (Admin Only)
+  // Save Personal/Bank/Employment Section
   const handleSaveSection = async (section) => {
-    if (currentUser.role !== "admin")
-      return alert("Employees cannot edit this section.");
+    const empId = selectedEmployee._id;
 
-    if (!selectedEmployee?._id) return alert("No employee selected");
     let body = {};
+
     if (section === "personal") body = personal;
-    else if (section === "bank") body = { bankInfo: bank };
-    else if (section === "employment") body = employment;
+    if (section === "bank") body = { bankInfo: bank };
+    if (section === "employment") body = employment;
+
+    const url =
+      isAdmin && section !== "password"
+        ? `http://localhost:5000/api/employees/${empId}`
+        : `http://localhost:5000/api/employees/${empId}/self-update`;
 
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/employees/${selectedEmployee._id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        }
-      );
-      if (!res.ok) throw new Error("Failed to update info");
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-      alert("✅ Information saved successfully!");
+      if (!res.ok) throw new Error("Update failed");
+
+      alert("Saved successfully");
       await fetchEmployeeData(selectedEmployee);
     } catch (err) {
-      console.error("❌ Error updating employee:", err);
-      alert("❌ Failed to save information");
+      console.error(err);
+      alert("Failed to save");
     }
   };
 
-  // ✅ Holiday form handlers
+  // Holiday modal
   const openHolidayModal = (holiday = null) => {
     setEditingHoliday(holiday);
     setHolidayForm(
@@ -139,12 +145,12 @@ function Settings() {
 
   const handleHolidaySubmit = async (e) => {
     e.preventDefault();
-    if (!selectedEmployee) return alert("⚠️ No employee selected");
+    if (!selectedEmployee) return;
 
     const payload = {
       ...holidayForm,
-      employeeId: selectedEmployee._id || currentUser._id,
-      employeeName: selectedEmployee.name || currentUser.name,
+      employeeId: selectedEmployee._id,
+      employeeName: selectedEmployee.name,
       startDate:
         typeof holidayForm.startDate === "string"
           ? holidayForm.startDate
@@ -158,32 +164,24 @@ function Settings() {
     const url = editingHoliday
       ? `http://localhost:5000/api/holidays/${editingHoliday._id}`
       : `http://localhost:5000/api/holidays`;
+
     const method = editingHoliday ? "PUT" : "POST";
 
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+    await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-      if (!res.ok) throw new Error("Save failed");
-      alert("✅ Holiday saved successfully!");
-      setShowHolidayModal(false);
-      setEditingHoliday(null);
-      await fetchEmployeeData(selectedEmployee);
-    } catch (err) {
-      console.error("❌ Error saving holiday:", err);
-      alert("❌ Could not save holiday request");
-    }
+    setShowHolidayModal(false);
+    setEditingHoliday(null);
+    fetchEmployeeData(selectedEmployee);
   };
 
   if (loading) return <p style={{ padding: 30 }}>Loading...</p>;
-
-  const isAdmin = currentUser.role === "admin";
 
   return (
     <div
@@ -195,31 +193,29 @@ function Settings() {
         overflowY: "auto",
       }}
     >
-      {/* LEFT COLUMN */}
+      {/* LEFT */}
       <div style={{ flex: 1 }}>
         {isAdmin && employees.length > 0 && (
           <div style={{ marginBottom: 20 }}>
-            <label>
-              <strong>Select Employee:</strong>{" "}
-              <select
-                value={selectedEmployee?._id || ""}
-                onChange={(e) =>
-                  setSelectedEmployee(
-                    employees.find((emp) => emp._id === e.target.value) || null
-                  )
-                }
-              >
-                {employees.map((emp) => (
-                  <option key={emp._id} value={emp._id}>
-                    {emp.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <strong>Select Employee:</strong>
+            <select
+              value={selectedEmployee?._id || ""}
+              onChange={(e) =>
+                setSelectedEmployee(
+                  employees.find((emp) => emp._id === e.target.value)
+                )
+              }
+            >
+              {employees.map((emp) => (
+                <option key={emp._id} value={emp._id}>
+                  {emp.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
-        {/* Personal Info */}
+        {/* Personal */}
         <section style={sectionBox}>
           <h3>👤 Personal Information</h3>
           {["name", "email", "phone", "address", "citizenship"].map((f) => (
@@ -229,20 +225,20 @@ function Settings() {
                 style={inputStyle}
                 value={personal[f] || ""}
                 onChange={(e) =>
-                  isAdmin && setPersonal({ ...personal, [f]: e.target.value })
+                  setPersonal({ ...personal, [f]: e.target.value })
                 }
-                disabled={!isAdmin}
               />
             </div>
           ))}
-          {isAdmin && (
-            <button style={saveBtn} onClick={() => handleSaveSection("personal")}>
-              💾 Save
-            </button>
-          )}
+          <button
+            style={saveBtn}
+            onClick={() => handleSaveSection("personal")}
+          >
+            Save
+          </button>
         </section>
 
-        {/* Bank Info */}
+        {/* Bank */}
         <section style={sectionBox}>
           <h3>🏦 Bank Information</h3>
           {["bankName", "accountNumber", "iban", "paymentMethod"].map((f) => (
@@ -252,17 +248,17 @@ function Settings() {
                 style={inputStyle}
                 value={bank[f] || ""}
                 onChange={(e) =>
-                  isAdmin && setBank({ ...bank, [f]: e.target.value })
+                  setBank({ ...bank, [f]: e.target.value })
                 }
-                disabled={!isAdmin}
               />
             </div>
           ))}
-          {isAdmin && (
-            <button style={saveBtn} onClick={() => handleSaveSection("bank")}>
-              💾 Save
-            </button>
-          )}
+          <button
+            style={saveBtn}
+            onClick={() => handleSaveSection("bank")}
+          >
+            Save
+          </button>
         </section>
 
         {/* Password */}
@@ -275,8 +271,9 @@ function Settings() {
         </section>
       </div>
 
-      {/* RIGHT COLUMN */}
+      {/* RIGHT */}
       <div style={{ flex: 1 }}>
+        {/* Employment (Admin Only Editable) */}
         <section style={sectionBox}>
           <h3>💼 Employment Information</h3>
           {Object.entries(employment).map(([key, value]) => (
@@ -286,15 +283,19 @@ function Settings() {
                 style={inputStyle}
                 value={value || ""}
                 onChange={(e) =>
-                  isAdmin && setEmployment({ ...employment, [key]: e.target.value })
+                  isAdmin &&
+                  setEmployment({ ...employment, [key]: e.target.value })
                 }
                 disabled={!isAdmin}
               />
             </div>
           ))}
           {isAdmin && (
-            <button style={saveBtn} onClick={() => handleSaveSection("employment")}>
-              💾 Save Employment Info
+            <button
+              style={saveBtn}
+              onClick={() => handleSaveSection("employment")}
+            >
+              Save Employment Info
             </button>
           )}
         </section>
@@ -303,8 +304,9 @@ function Settings() {
         <section style={sectionBox}>
           <h3>🏖️ Holiday Requests</h3>
           <button style={addBtn} onClick={() => openHolidayModal()}>
-            ➕ Add Holiday
+            Add Holiday
           </button>
+
           <table
             border="1"
             cellPadding="6"
@@ -321,10 +323,11 @@ function Settings() {
                 <th>Action</th>
               </tr>
             </thead>
+
             <tbody>
               {holidays.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", color: "gray" }}>
+                  <td colSpan="7" style={{ textAlign: "center" }}>
                     No holiday requests found.
                   </td>
                 </tr>
@@ -339,7 +342,7 @@ function Settings() {
                     <td>{h.approval}</td>
                     <td>
                       {(isAdmin || currentUser._id === h.employeeId) && (
-                        <button onClick={() => openHolidayModal(h)}>✏️ Edit</button>
+                        <button onClick={() => openHolidayModal(h)}>Edit</button>
                       )}
                     </td>
                   </tr>
@@ -350,13 +353,13 @@ function Settings() {
         </section>
       </div>
 
-      {/* Holiday Modal */}
+      {/* Modal */}
       {showHolidayModal && (
         <div style={modalOverlay}>
           <div style={modalBox}>
             <h3>{editingHoliday ? "Edit Holiday" : "Add Holiday"}</h3>
             <form onSubmit={handleHolidaySubmit}>
-              <label style={labelStyle}>Type of Leave</label>
+              <label style={labelStyle}>Type</label>
               <select
                 style={inputStyle}
                 value={holidayForm.type}
@@ -364,44 +367,38 @@ function Settings() {
                   setHolidayForm({ ...holidayForm, type: e.target.value })
                 }
               >
-                <option value="">Select Reason</option>
+                <option value="">Select</option>
                 <option value="Annual">Annual</option>
                 <option value="Sick">Sick</option>
                 <option value="Other">Other</option>
               </select>
 
-              <label style={labelStyle}>Start Date</label>
+              <label style={labelStyle}>Start</label>
               <DatePicker
-                selected={
-                  holidayForm.startDate ? new Date(holidayForm.startDate) : new Date()
-                }
-                onChange={(date) =>
+                selected={new Date(holidayForm.startDate)}
+                onChange={(d) =>
                   setHolidayForm({
                     ...holidayForm,
-                    startDate: date.toISOString().split("T")[0],
+                    startDate: d.toISOString().split("T")[0],
                   })
                 }
-                dateFormat="yyyy-MM-dd"
               />
 
-              <label style={labelStyle}>End Date</label>
+              <label style={labelStyle}>End</label>
               <DatePicker
-                selected={
-                  holidayForm.endDate ? new Date(holidayForm.endDate) : new Date()
-                }
-                onChange={(date) =>
+                selected={new Date(holidayForm.endDate)}
+                onChange={(d) =>
                   setHolidayForm({
                     ...holidayForm,
-                    endDate: date.toISOString().split("T")[0],
+                    endDate: d.toISOString().split("T")[0],
                   })
                 }
-                dateFormat="yyyy-MM-dd"
               />
 
               <label style={labelStyle}>Notes</label>
               <textarea
                 style={inputStyle}
-                value={holidayForm.notes || ""}
+                value={holidayForm.notes}
                 onChange={(e) =>
                   setHolidayForm({ ...holidayForm, notes: e.target.value })
                 }
@@ -424,12 +421,15 @@ function Settings() {
                 </>
               )}
 
-              <div style={{ textAlign: "right", marginTop: 15 }}>
-                <button type="button" onClick={() => setShowHolidayModal(false)}>
+              <div style={{ marginTop: 20, textAlign: "right" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowHolidayModal(false)}
+                >
                   Cancel
                 </button>
                 <button type="submit" style={saveBtn}>
-                  💾 Save
+                  Save
                 </button>
               </div>
             </form>
@@ -440,7 +440,7 @@ function Settings() {
   );
 }
 
-/* --- Styles --- */
+/* Styles */
 const sectionBox = {
   marginBottom: "25px",
   border: "1px solid #ddd",
@@ -468,7 +468,6 @@ const saveBtn = {
 const addBtn = {
   background: "#4CAF50",
   color: "white",
-  border: "none",
   padding: "6px 10px",
   borderRadius: "6px",
   cursor: "pointer",
@@ -483,14 +482,12 @@ const modalOverlay = {
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  zIndex: 1000,
 };
 const modalBox = {
   background: "#fff",
   padding: "25px",
   borderRadius: "10px",
   width: "400px",
-  boxShadow: "0 5px 20px rgba(0,0,0,0.2)",
 };
 
 export default Settings;

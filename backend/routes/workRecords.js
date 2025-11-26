@@ -153,4 +153,33 @@ router.delete("/:id", verifyToken, async (req, res) => {
   }
 });
 
+/* ======================================
+   🔹 NEW: Fetch records for a specific month
+   Safe, isolated, only for MyPayroll
+====================================== */
+router.get("/by-month", verifyToken, async (req, res) => {
+  try {
+    const { month } = req.query;
+    if (!month) {
+      return res.status(400).json({ error: "Month (YYYY-MM) is required" });
+    }
+
+    const query = {
+      date: { $regex: `^${month}` },
+    };
+
+    // Limit employees
+    if (req.user.role === "employee") {
+      query.employeeId = req.user.employeeId;
+    }
+
+    const records = await WorkRecord.find(query).sort({ date: 1 });
+    res.json(records);
+  } catch (err) {
+    console.error("❌ Error fetching monthly records:", err);
+    res.status(500).json({ error: "Failed to fetch records by month" });
+  }
+});
+
+
 module.exports = router;
